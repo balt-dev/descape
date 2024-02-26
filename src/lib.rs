@@ -20,7 +20,7 @@ mod sealed {
     impl Sealed for &'_ str {}
 }
 
-/// Extension trait for &str
+/// Extension trait for &str to allow unescaping of strings.
 pub trait UnescapeExt: sealed::Sealed {
 
     /**
@@ -32,7 +32,7 @@ pub trait UnescapeExt: sealed::Sealed {
     - `\\r` -> `\r`
     - `\\t` -> `\t`
     - `\\b` -> `\x08`
-    - `\\f` -> `\x03`
+    - `\\f` -> `\x0C`
     - `\\'` -> `'`
     - `\\"` -> `"`
     - `\\\\` -> `\\`
