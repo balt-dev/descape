@@ -1,0 +1,10 @@
+[package]
+name = "descape"
+version = "1.0.0"
+edition = "2018"
+description = "Adds a single extension trait for &str to unescape any backslashes."
+license = "Apache 2.0 OR MIT"
+repository = "https://github.com/balt-dev/descape"
+keywords = ["unescape", "string", "escape", "strings", "unicode"]
+categories = ["no-std", "parsing", "value-formatting"]
+readme = "README.md"
