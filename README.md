@@ -1,8 +1,9 @@
-[![Repository](https://img.shields.io/badge/repository-GitHub-brightgreen.svg)](https://github.com/balt-dev/descape)
-[![Documentation](https://docs.rs/descape/badge.svg)](https://docs.rs/descape)
-[![Latest version](https://img.shields.io/crates/v/descape.svg)](https://crates.io/crates/descape)
-[![MSRV](https://img.shields.io/badge/MSRV-1.52.1-gold)](https://gist.github.com/alexheretic/d1e98d8433b602e57f5d0a9637927e0c)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/balt-dev/descape/.github%2Fworkflows%2Frust.yml?branch=master&style=flat&label=tests)](https://github.com/balt-dev/descape/actions/)
 [![Coverage](https://coveralls.io/repos/github/balt-dev/descape/badge.svg?branch=master)](https://coveralls.io/github/balt-dev/descape/)
+[![Documentation](https://docs.rs/descape/badge.svg)](https://docs.rs/descape)
+[![MSRV](https://img.shields.io/badge/MSRV-1.52.1-gold)](https://gist.github.com/alexheretic/d1e98d8433b602e57f5d0a9637927e0c)
+[![Repository](https://img.shields.io/badge/-GitHub-%23181717?style=flat&logo=github&labelColor=%23555555&color=%23181717)](https://github.com/balt-dev/descape)
+[![Latest version](https://img.shields.io/crates/v/descape.svg)](https://crates.io/crates/descape)
 [![License](https://img.shields.io/crates/l/descape.svg)](https://github.com/balt-dev/descape/blob/master/LICENSE-MIT)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 
