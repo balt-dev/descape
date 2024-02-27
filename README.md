@@ -25,6 +25,9 @@ The following escapes are valid:
 - `\\uXXXX` -> `\u{XXXX}`
 - `\\u{HEX}` -> `\u{HEX}`
 
+UTF-8 escapes specified by multiple consecutive `\xNN` escapes will not work as intended, producing [mojibake](https://en.wikipedia.org/wiki/Mojibake).
+It's assumed that the escaped data is already UTF-8 encoded.
+
 ---
 
 ```rust
@@ -43,10 +46,10 @@ assert_eq!(
     Ok(Cow::Borrowed("No escapes here!"))
 );
 
-//                              v  invalid at index 9
+//                           v  invalid at index 7
 let invalid_escape = "Uh oh! \\xJJ".to_unescaped();
 assert_eq!(
     invalid_escape,
-    Err(9)
+    Err(7)
 );
 ```

@@ -77,7 +77,8 @@ pub trait UnescapeExt: sealed::Sealed {
         invalid_escape,
         Err(7)
     );
-    */
+    ```
+     */
     fn to_unescaped(&self) -> Result<Cow<'_, str>, usize>;
 }
 
