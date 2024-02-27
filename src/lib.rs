@@ -14,6 +14,9 @@ use alloc::{
     string::{
         String,
         ToString
+    },
+    str::{
+        CharIndices
     }
 };
 
@@ -68,11 +71,11 @@ pub trait UnescapeExt: sealed::Sealed {
         Ok(Cow::Borrowed("No escapes here!"))
     );
 
-    //                              v  invalid at index 9
+    //                           v  invalid at index 7
     let invalid_escape = "Uh oh! \\xJJ".to_unescaped();
     assert_eq!(
         invalid_escape,
-        Err(9)
+        Err(7)
     );
     */
     fn to_unescaped(&self) -> Result<Cow<'_, str>, usize>;
@@ -81,65 +84,57 @@ pub trait UnescapeExt: sealed::Sealed {
 impl<'orig> UnescapeExt for &'orig str {
     fn to_unescaped(&self) -> Result<Cow<'orig, str>, usize> {
         // Iterates over each character as a UTF-8 string slice
-        let slices = self.split("");
-        let indices = core::iter::once(0)
-            .chain(self.char_indices().map(|(idx, _)| idx));
-        let mut iter = slices
-            .zip(indices);
+        let mut iter = self.char_indices();
         let mut seen = ""; // Shouldn't need to be initialized but rustc can't tell
-        let len = self.len();
         let mut owned = None::<String>;
 
-        while let Some((slice, end_index)) = iter.next() {
-            if slice.is_empty() {
-                continue;
-            }
-            if slice != r"\" {
+        while let Some((idx, chr)) = iter.next() {
+            if chr != '\\' {
                 if let Some(owned) = &mut owned {
-                    owned.push_str(slice);
+                    owned.push(chr);
                 } else {
-                    seen = &self[..end_index];
+                    seen = &self[..idx + chr.len_utf8()];
                 }
                 continue;
             }
             let owned = owned.get_or_insert_with(
                 || seen.to_string()
             );
-            if let Some((slice, end_index)) = iter.next() {
-                match slice {
-                    "b" => owned.push('\x08'),
-                    "f" => owned.push('\x0C'),
-                    "n" => owned.push('\n'),
-                    "t" => owned.push('\t'),
-                    "r" => owned.push('\r'),
-                    "'" => owned.push('\''),
-                    "\"" => owned.push('"'),
-                    "\\" => owned.push('\\'),
-                    "u" => {
-                        let (char, skip) = unescape_unicode(
-                            self, end_index, (&mut iter).map(|(slice, _)| slice), slice, len
+            if let Some((idx, chr)) = iter.next() {
+                match chr {
+                    'b' => owned.push('\x08'),
+                    'f' => owned.push('\x0C'),
+                    'n' => owned.push('\n'),
+                    't' => owned.push('\t'),
+                    'r' => owned.push('\r'),
+                    '\'' => owned.push('\''),
+                    '"' => owned.push('"'),
+                    '\\' => owned.push('\\'),
+                    'u' => {
+                        let (chr, skip) = unescape_unicode(
+                            self, idx, &mut iter
                         )?;
                         // Skip the needed amount of characters
                         for _ in 0..skip {
                             iter.next();
                         }
-                        owned.push(char);
+                        owned.push(chr);
                     },
-                    "x" => {
-                        owned.push(unescape_hex(self, end_index)?);
+                    'x' => {
+                        owned.push(unescape_hex(self, idx)?);
                         // Skip two characters
                         iter.next();
                         iter.next();
                     },
-                    c if c.chars().next().unwrap().is_digit(8) => {
-                        let (char, skip) = unescape_oct(self, end_index)?;
+                    c if c.is_digit(8) => {
+                        let (chr, skip) = unescape_oct(self, idx)?;
                         // Skip the needed amount of characters
                         for _ in 0..skip {
                             iter.next();
                         }
-                        owned.push(char);
+                        owned.push(chr);
                     },
-                    _ => return Err(end_index),
+                    _ => return Err(idx - 1),
                 }
             } else {
                 // No matches found
@@ -156,60 +151,55 @@ impl<'orig> UnescapeExt for &'orig str {
 
 fn unescape_unicode<'s>(
     string: &'s str,
-    start_index: usize,
-    mut iter: impl Iterator<Item = &'s str>,
-    slice: &'s str,
-    len: usize,
+    idx: usize,
+    iter: &mut CharIndices<'s>
 ) -> Result<(char, usize), usize> {
-    let next = iter.next().ok_or(len)?;
-    let end_index = start_index + slice.len();
-    if next == "{" {
+    let (next_idx, next) = iter.next().ok_or(string.len())?;
+    if next == '{' {
         // \u{HEX}
-        let end = string[end_index ..].find('}')
-            .ok_or(start_index - 2)?;
-        let num = &string[end_index .. end_index + end];
-        let codepoint = u32::from_str_radix(num, 16)
-            .map_err(|_| start_index - 2)?;
-        char::from_u32(codepoint).ok_or(start_index - 2).map(|v| (v, end + 1))
+        let hex_idx = next_idx + 1; // '{'.len_utf8() == 1
+        let end = string[hex_idx..].find('}').ok_or(idx - 1)?;
+        let num = &string[hex_idx..hex_idx + end];
+        let codepoint = u32::from_str_radix(num, 16).map_err(|_| idx - 1)?;
+        char::from_u32(codepoint).ok_or(idx-1).map(|v| (v, end + 1))
     } else {
         // \uNNNN
         // If any of these are non-ASCII, then it's already invalid,
         // so a direct slice is fine
-        let next_four = string.get(start_index .. start_index + 4)
-            .ok_or(start_index - 2)?;
-        let codepoint = u32::from_str_radix(next_four, 16).map_err(|_| start_index - 2)?;
+        let next_four = string.get(next_idx .. next_idx + 4).ok_or(idx - 1)?;
+        let codepoint = u32::from_str_radix(next_four, 16).map_err(|_| idx - 1)?;
         // Encode the u32
-        char::from_u32(codepoint).ok_or(start_index - 2).map(|v| (v, 3))
+        char::from_u32(codepoint).ok_or(idx - 1).map(|v| (v, 3))
     }
 }
 
 // FIXME: This could be factored out along with part of unescape_unicode into its own function.
 fn unescape_hex(
     slice: &str,
-    start_index: usize,
+    idx: usize,
 ) -> Result<char, usize> {
     // Must be \xNN
-    let codepoint = slice.get(start_index .. start_index + 2)
+    let codepoint = slice.get(idx + 1 .. idx + 3)
         .and_then(|num| u32::from_str_radix(num, 16).ok())
-        .ok_or(start_index - 2)?;
-    char::from_u32(codepoint).ok_or(start_index)
+        .ok_or(idx - 1)?;
+    char::from_u32(codepoint).ok_or(idx - 1)
 }
 
 fn unescape_oct(
     string: &str,
-    start_index: usize,
+    idx: usize,
 ) -> Result<(char, usize), usize> {
     // Could be \o, \oo, or \ooo
-    let (index, (len, char)) = string[start_index..].char_indices()
+    let (len, (index, chr)) = string[idx..].char_indices()
         .take(3)
         .take_while(|(_, c)| c.is_digit(8))
         .enumerate()
         .last()
-        .ok_or(start_index)?;
-    let end_index = index + char.len_utf8();
-    let num = &string[start_index..end_index];
+        .ok_or(idx - 1)?;
+    let end_index = index + chr.len_utf8();
+    let num = &string[idx..end_index];
     let codepoint = u32::from_str_radix(num, 8)
-        .map_err(|_| start_index)?;
-    char::from_u32(codepoint).map(|v| (v, len - 1)).ok_or(start_index)
+        .map_err(|_| idx - 1)?;
+    char::from_u32(codepoint).map(|v| (v, len - 1)).ok_or(idx - 1)
 }
 
