@@ -82,7 +82,8 @@ impl<'orig> UnescapeExt for &'orig str {
     fn to_unescaped(&self) -> Result<Cow<'orig, str>, usize> {
         // Iterates over each character as a UTF-8 string slice
         let slices = self.split("");
-        let indices = self.char_indices().map(|(idx, _)| idx);
+        let indices = core::iter::once(0)
+            .chain(self.char_indices().map(|(idx, _)| idx));
         let mut iter = slices
             .zip(indices);
         let mut seen = ""; // Shouldn't need to be initialized but rustc can't tell

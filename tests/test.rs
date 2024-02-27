@@ -1,7 +1,7 @@
 static ESCAPED: &str =
-    r#"\b \f \n \t \r \' \" \\ \u{0} \u{21} \u{433} \u{FFFD} \u0000 \u0021 \uFFFD \x7E \xFF"#;
+    r#"\b \f \n❤️\t \r \' \" \\ \u{0} \u{21}❤️\u{433} \u{FFFD} \u0000 \u0021 \uFFFD \x7E \xFF"#;
 static UNESCAPED: &str =
-    "\x08 \x0C \n \t \r \' \" \\ \u{0} \u{21} \u{433} \u{FFFD} \u{0000} \u{0021} \u{FFFD} \x7E \u{FF}";
+    "\x08 \x0C \n❤️\t \r \' \" \\ \u{0} \u{21}❤️\u{433} \u{FFFD} \u{0000} \u{0021} \u{FFFD} \x7E \u{FF}";
 
 static BAD_ESCAPE: &str = r"\l";
 static BAD_UNIC: &str = r"\u{This is definitely not hexadecimal}";
@@ -25,6 +25,7 @@ macro_rules! ensure_err {
 fn test_escapes() {
     assert_eq!(
         ESCAPED.to_unescaped()
+            .map_err(|idx| &ESCAPED[..idx])
             .expect("should not reject legal escaped string"),
         UNESCAPED
     );
