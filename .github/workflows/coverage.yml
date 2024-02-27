@@ -26,6 +26,7 @@ jobs:
           RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off"
           CARGO_INCREMENTAL: 0
         run: |
+          cargo install grcov
           cargo build --verbose
           cargo test --verbose
           zip -0 cov.zip $(find . -name "$PROJECT_NAME*.gc*" -print)
