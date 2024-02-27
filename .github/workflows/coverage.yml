@@ -1,0 +1,14 @@
+name: Coverage
+
+on:
+  push:
+    branches:
+      - main
+      
+jobs:
+  coveralls:
+    name: Coveralls GitHub Action
+    runs-on: ubuntu-latest
+    steps:
+      - name: Coveralls GitHub Action
+        uses: coverallsapp/github-action@v2.2.3
