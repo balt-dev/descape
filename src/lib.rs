@@ -1,4 +1,4 @@
-#![no_std]
+//#![no_std]
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic, clippy::perf, missing_docs, clippy::panic, clippy::cargo)]
 
@@ -129,7 +129,6 @@ impl<'orig> UnescapeExt for &'orig str {
                     },
                     c if c.is_digit(8) => {
                         let (chr, skip) = unescape_oct(self, idx)?;
-                        // Skip the needed amount of characters
                         for _ in 0..skip {
                             iter.next();
                         }
@@ -191,16 +190,17 @@ fn unescape_oct(
     idx: usize,
 ) -> Result<(char, usize), usize> {
     // Could be \o, \oo, or \ooo
-    let (len, (index, chr)) = string[idx..].char_indices()
+    let (last_idx, (skip_count, last_digit)) = dbg!(&string[idx..])
+        .char_indices()
         .take(3)
-        .take_while(|(_, c)| c.is_digit(8))
+        .take_while(|(_, c)| dbg!(c).is_digit(8))
         .enumerate()
         .last()
         .ok_or(idx - 1)?;
-    let end_index = index + chr.len_utf8();
+    let end_index = idx + last_idx + last_digit.len_utf8();
     let num = &string[idx..end_index];
     let codepoint = u32::from_str_radix(num, 8)
         .map_err(|_| idx - 1)?;
-    char::from_u32(codepoint).map(|v| (v, len - 1)).ok_or(idx - 1)
+    char::from_u32(codepoint).map(|chr| (chr, skip_count)).ok_or(idx - 1)
 }
 
