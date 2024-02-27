@@ -1,4 +1,4 @@
-//#![no_std]
+#![no_std]
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic, clippy::perf, missing_docs, clippy::panic, clippy::cargo)]
 
@@ -190,10 +190,10 @@ fn unescape_oct(
     idx: usize,
 ) -> Result<(char, usize), usize> {
     // Could be \o, \oo, or \ooo
-    let (last_idx, (skip_count, last_digit)) = dbg!(&string[idx..])
+    let (last_idx, (skip_count, last_digit)) = string[idx..]
         .char_indices()
         .take(3)
-        .take_while(|(_, c)| dbg!(c).is_digit(8))
+        .take_while(|(_, c)| c.is_digit(8))
         .enumerate()
         .last()
         .ok_or(idx - 1)?;
