@@ -11,7 +11,19 @@ jobs:
     name: Coveralls GitHub Action
     runs-on: ubuntu-latest
     steps:
-      - name: Coveralls GitHub Action
+      - name: Run grcov
         env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-        uses: coverallsapp/github-action@v2.2.3
+          PROJECT_NAME: "descape"
+          RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zno-landing-pads"
+          CARGO_INCREMENTAL: 0
+        run: |
+          cargo build --verbose
+          cargo test --verbose
+          zip -0 cov.zip $(find . -name "$PROJECT_NAME*.gc*" -print)
+          grcov cov.zip -s . -t lcov --llvm --ignore-not-existing --ignore "/*" -o lcov.info
+
+      - name: Push grcov results to Coveralls via GitHub Action
+        uses: coverallsapp/github-action@v1.0.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: "lcov.info"
