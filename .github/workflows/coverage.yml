@@ -11,6 +11,8 @@ jobs:
     name: Coveralls GitHub Action
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
+    
       - name: Get toolchain
         uses: actions-rs/toolchain@v1
         with:
