@@ -22,7 +22,7 @@ use alloc::{
 
 mod sealed {
     pub trait Sealed {}
-    impl Sealed for &'_ str {}
+    impl Sealed for str {}
 }
 
 /// Extension trait for &str to allow unescaping of strings.
@@ -82,8 +82,8 @@ pub trait UnescapeExt: sealed::Sealed {
     fn to_unescaped(&self) -> Result<Cow<'_, str>, usize>;
 }
 
-impl<'orig> UnescapeExt for &'orig str {
-    fn to_unescaped(&self) -> Result<Cow<'orig, str>, usize> {
+impl UnescapeExt for str {
+    fn to_unescaped(&self) -> Result<Cow<'_, str>, usize> {
         // Iterates over each character as a UTF-8 string slice
         let mut iter = self.char_indices();
         let mut seen = ""; // Shouldn't need to be initialized but rustc can't tell
