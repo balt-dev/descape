@@ -98,9 +98,11 @@ impl UnescapeExt for str {
                 }
                 continue;
             }
-            let owned = owned.get_or_insert_with(
-                || seen.to_string()
-            );
+            let owned = owned.get_or_insert_with(|| {
+                let mut string = seen.to_string();
+                string.reserve_exact(self.len() - seen.len());
+                string
+            });
             if let Some((idx, chr)) = iter.next() {
                 match chr {
                     'b' => owned.push('\x08'),
