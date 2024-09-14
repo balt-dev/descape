@@ -7,51 +7,66 @@
 [![License](https://img.shields.io/crates/l/descape.svg)](https://github.com/balt-dev/descape/blob/master/LICENSE-MIT)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 
-Adds a single extension trait for `&str` to unescape any backslashes. Supports `no-std`.
 
-Unescaping is designed to support as many languages as possible.
+# descape
 
-The following escapes are valid:
-- `\\n` -> `\n`
-- `\\r` -> `\r`
-- `\\t` -> `\t`
-- `\\b` -> `\x08`
-- `\\f` -> `\x0C`
+Provides utilities for easily parsing escape sequences in a string, using `alloc::borrow::Cow` to only borrow when needed.
+
+This library supports many escape sequences:
+- All escapes mentioned in the documentation of `core::ascii::Char`
 - `\\'` -> `'`
 - `\\"` -> `"`
+- <code>&bsol;&bsol;&grave;</code> -> <code>&grave;</code>
 - `\\\\` -> `\\`
 - `\\xNN` -> `\xNN`
-- `\\o` -> `\o`
-- `\\oo` -> `\oo`
-- `\\ooo` -> `\ooo`
+- `\\o` -> `\o`, for all octal digits `o`
+- `\\oo` -> `\oo`, for all octal digits `o`
+- `\\ooo` -> `\ooo`, for all octal digits `o`
 - `\\uXXXX` -> `\u{XXXX}`
 - `\\u{HEX}` -> `\u{HEX}`
 
-UTF-8 escapes specified by multiple consecutive `\xNN` escapes will not work as intended, producing [mojibake](https://en.wikipedia.org/wiki/Mojibake).
-It's assumed that the escaped data is already UTF-8 encoded.
+Along with this, you can define your own custom escape handlers! See `UnescapeExt::to_unescaped_with` for more information on that.
 
----
+This crate supports `no-std`.
 
+
+
+## Examples
+
+### Parsing an escaped string
 ```rust
-use alloc::borrow::Cow;
-use descape::UnescapeExt;
-
 let escaped = "Hello,\\nworld!".to_unescaped();
 assert_eq!(
     escaped,
     Ok(Cow::Owned::<'_, str>("Hello,\nworld!".to_string()))
 );
+```
 
+### Not allocating for a string without escapes
+```rust
 let no_escapes = "No escapes here!".to_unescaped();
 assert_eq!(
     no_escapes,
     Ok(Cow::Borrowed("No escapes here!"))
 );
+```
 
-//                           v  invalid at index 7
-let invalid_escape = "Uh oh! \\xJJ".to_unescaped();
+### Erroring for invalid escapes
+```rust
+let invalid_escape = r"Uh oh! \xJJ".to_unescaped();
 assert_eq!(
     invalid_escape,
     Err(7)
 );
+```
+
+### Custom escape handlers
+```rust
+fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<Option<char>, ()> {
+    Ok(Some(chr))
+}
+
+let escaped = r"\H\e\l\l\o \n \W\o\r\l\d";
+let unescaped = escaped.to_unescaped_with(raw).expect("this is fine");
+assert_eq!(unescaped, "Hello n World");
 ```

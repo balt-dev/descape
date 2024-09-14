@@ -52,9 +52,9 @@ fn test_escapes() {
     );
 }
 
-fn custom_esc(idx: usize, chr: char, iter: &mut CharIndices<'_>) -> Result<Option<char>, ()> {
+fn custom_esc(_: usize, chr: char, iter: &mut CharIndices<'_>) -> Result<Option<char>, ()> {
     if chr == 'T' {
-        let (idx, next) = iter.next().ok_or(())?;
+        let (_, next) = iter.next().ok_or(())?;
         return Ok(Some(match next {
             'a' => 'g',
             'o' => 'p',

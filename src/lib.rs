@@ -7,13 +7,13 @@
 
 # descape
 
-Provides utilities for easily parsing escape sequences in a string, using `alloc::borrow::Cow` to only borrow when needed.
+Provides utilities for easily parsing escape sequences in a string, using [`alloc::borrow::Cow`] to only borrow when needed.
 
 This library supports many escape sequences:
-- All escapes mentioned in the documentation of `core::ascii::Char`
+- All escapes mentioned in the documentation of [`core::ascii::Char`]
 - `\\'` -> `'`
 - `\\"` -> `"`
-- `\\\`` -> `\``
+- <code>&bsol;&bsol;&grave;</code> -> <code>&grave;</code>
 - `\\\\` -> `\\`
 - `\\xNN` -> `\xNN`
 - `\\o` -> `\o`, for all octal digits `o`
@@ -53,33 +53,38 @@ pub trait UnescapeExt: sealed::Sealed {
     Unescapes a string, returning an [`alloc::borrow::Cow`].
     Will only allocate if the string has any escape sequences.
 
-    Uses [`descape::default_handler`].
+    Uses [`crate::default_handler`].
 
     # Errors
     Errors if there's an invalid escape sequence in the string.
     Passes back the byte index of the invalid character.
 
     # Examples
+    ### Parsing an escaped string
     ```rust
-    # extern crate alloc;
-
-    use alloc::borrow::Cow;
-    use descape::UnescapeExt;
-
+    # use std::borrow::Cow; use descape::UnescapeExt;
     let escaped = "Hello,\\nworld!".to_unescaped();
     assert_eq!(
         escaped,
         Ok(Cow::Owned::<'_, str>("Hello,\nworld!".to_string()))
     );
+    ```
 
+    ### Not allocating for a string without escapes
+    ```rust
+    # use std::borrow::Cow; use descape::UnescapeExt;
     let no_escapes = "No escapes here!".to_unescaped();
     assert_eq!(
         no_escapes,
         Ok(Cow::Borrowed("No escapes here!"))
     );
+    ```
 
-    //                           v  invalid at index 7
-    let invalid_escape = "Uh oh! \\xJJ".to_unescaped();
+    ### Erroring for invalid escapes
+    ```
+    //                            v  invalid at index 7
+    # use std::borrow::Cow; use descape::UnescapeExt;
+    let invalid_escape = r"Uh oh! \xJJ".to_unescaped();
     assert_eq!(
         invalid_escape,
         Err(7)
@@ -101,12 +106,16 @@ pub trait UnescapeExt: sealed::Sealed {
     Handlers return a `Result<Option<char>, ()>`.
     Returning `Ok(Some(char))` replaces the sequence with the given character,
     returning `Ok(None)` removes the sequence entirely,
-    and returning `Err(())` errors the unescaping at the current index.
-    
-    In the case of an error, handlers should return the index of the leading `\\` (i.e. `idx - 1`).
+    and returning `Err(())` errors the unescaping at the index of the escape sequence.
+
+    # Errors
+
+    Errors if there's an invalid escape sequence in the string.
+    Passes back the byte index of the invalid character.
 
     # Examples
-    Permitting any escape, handing it back raw:
+
+    ### Permitting any escape, handing it back raw
     ```rust
     # use descape::UnescapeExt; use std::str::CharIndices;
     fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<Option<char>, ()> {
@@ -118,7 +127,19 @@ pub trait UnescapeExt: sealed::Sealed {
     assert_eq!(unescaped, "Hello n World");
     ```
 
-    Not allowing escape sequences unsupported by Rust:
+    ### Removing escape sequences entirely
+    ```rust
+    # use descape::UnescapeExt; use std::str::CharIndices;
+    fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<Option<char>, ()> {
+        Ok(None)
+    }
+
+    let escaped = r"What if I want a \nnewline?";
+    let unescaped = escaped.to_unescaped_with(raw).expect("this should work");
+    assert_eq!(unescaped, "What if I want a newline?");
+    ```
+
+    ### Not allowing escape sequences unsupported by Rust
     ```rust
     # use descape::UnescapeExt; use std::str::CharIndices;
     fn rust_only(idx: usize, chr: char, iter: &mut CharIndices) -> Result<Option<char>, ()> {
@@ -132,7 +153,7 @@ pub trait UnescapeExt: sealed::Sealed {
     r"This is not \fine".to_unescaped_with(rust_only).expect_err(r"\f is invalid");
     ```
 
-    Logging escape indices
+    ### Logging escape indices
     ```rust
     # use descape::UnescapeExt; use std::str::CharIndices;
     let mut escape_indices = Vec::new();
@@ -168,7 +189,7 @@ impl UnescapeExt for str {
 
 fn to_unescaped_with_mono<'this, 'cb>(
     this: &'this str,
-    mut callback: &'cb mut dyn for<'iter> FnMut(usize, char, &'iter mut CharIndices<'this>) -> Result<Option<char>, ()>
+    callback: &'cb mut dyn for<'iter> FnMut(usize, char, &'iter mut CharIndices<'this>) -> Result<Option<char>, ()>
 ) -> Result<Cow<'this, str>, usize> {
     // Iterates over each character as a UTF-8 string slice
     let mut iter = this.char_indices();
@@ -190,7 +211,7 @@ fn to_unescaped_with_mono<'this, 'cb>(
             string
         });
         if let Some((_, chr)) = iter.next() {
-            if let Some(res) = callback(idx, chr, &mut iter).map_err(|_| idx)? {
+            if let Some(res) = callback(idx, chr, &mut iter).map_err(|()| idx)? {
                 owned.push(res);
                 continue;
             }
@@ -208,25 +229,25 @@ fn to_unescaped_with_mono<'this, 'cb>(
 
 /// The default escape sequence handler. 
 ///
-/// Meant to be passed to `UnescapeExt::to_unescaped_with`, or used in the definition of a custom one.
+/// Meant to be passed to [`UnescapeExt::to_unescaped_with`], or used in the definition of a custom one.
 ///
 /// The following escapes are valid:
-//     - All escapes mentioned in the documentation of `core::ascii::Char`
-//     - `\\'` -> `'`
-//     - `\\"` -> `"`
-//     - `\\\`` -> `\``
-//     - `\\\\` -> `\\`
-//     - `\\xNN` -> `\xNN`
-//     - `\\o` -> `\o`, for all octal digits `o`
-//     - `\\oo` -> `\oo`, for all octal digits `o`
-//     - `\\ooo` -> `\ooo`, for all octal digits `o`
-//     - `\\uXXXX` -> `\u{XXXX}`
-//     - `\\u{HEX}` -> `\u{HEX}`
-//
-// # Errors
-//
-// Errors if there's an invalid escape sequence in the string.
-// Passes back the byte index of the invalid character.
+///     - All escapes mentioned in the documentation of [`core::ascii::Char`]
+///     - `\\'` -> `'`
+///     - `\\"` -> `"`
+///     - <code>&bsol;&bsol;&grave;</code> -> <code>&grave;</code>
+///     - `\\\\` -> `\\`
+///     - `\\xNN` -> `\xNN`
+///     - `\\o` -> `\o`, for all octal digits `o`
+///     - `\\oo` -> `\oo`, for all octal digits `o`
+///     - `\\ooo` -> `\ooo`, for all octal digits `o`
+///     - `\\uXXXX` -> `\u{XXXX}`
+///     - `\\u{HEX}` -> `\u{HEX}`
+///
+/// # Errors
+///
+/// Errors if there's an invalid escape sequence in the string.
+#[allow(clippy::result_unit_err)]
 pub fn default_handler(_: usize, chr: char, iter: &mut CharIndices) -> Result<Option<char>, ()> {
     Ok( match chr {
         'a' => Some('\x07'),
@@ -297,6 +318,7 @@ fn unescape_hex(
     char::from_u32(codepoint)
 }
 
+#[allow(clippy::cast_possible_truncation)] // Can't actually happen
 fn unescape_oct(
     chr: char,
     iter: &mut CharIndices
@@ -309,8 +331,7 @@ fn unescape_oct(
         .take_while(|(_, c)| c.is_digit(8))
         .enumerate()
         .last()
-        .map(|(idx, _)| idx + 1)
-        .unwrap_or(0);
+        .map_or(0, |(idx, _)| idx + 1);
     let num = &str[ .. end];
     // These are the characters _after_ the first
     let mut codepoint = if num.is_empty() { 0 } else { u32::from_str_radix(num, 8).ok()? };
