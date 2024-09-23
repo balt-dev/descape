@@ -89,7 +89,7 @@ impl core::fmt::Display for InvalidEscape {
 }
 
 #[cfg_attr(docsrs, doc(cfg(any(feature = "std", feature = "core_error"))))]
-#[cfg(any(feature = "std", feature = "core_error"))]
+#[cfg(any(feature = "std", feature = "core_error", docsrs))]
 impl ErrorTrait for InvalidEscape {}
 
 /// A trait distinguishing an object as a handler for custom escape sequences.
