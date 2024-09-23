@@ -1,6 +1,6 @@
 [package]
 name = "descape"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2018"
 description = "Adds a single extension trait for &str to unescape any backslashes."
 license = "Apache-2.0 OR MIT"
@@ -11,3 +11,10 @@ readme = "README.md"
 
 [package.metadata]
 msrv = "1.52.1"
+
+[features]
+std = []
+core_error = []
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]

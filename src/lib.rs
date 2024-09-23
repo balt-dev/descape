@@ -2,6 +2,8 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic, clippy::perf, missing_docs, clippy::panic, clippy::cargo)]
 #![allow(clippy::type_complexity)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 
 /*!
 
@@ -33,7 +35,20 @@ Along with this, you can define your own custom escape handlers! See [`UnescapeE
 
 This crate supports `no-std`.
 
+Optionally, this crate has the `std` and `core_error` features, 
+to allow the error type of an invalid escape to implement the `Error` trait.
+
+`std` uses `std::error::Error`, and `core_error` depends on `core::error::Error`, which is stable on Rust 1.82.0 or greater.
+
 */
+
+
+#[cfg(feature = "std")]
+extern crate std;
+#[cfg(feature = "std")]
+use std::error::Error as ErrorTrait;
+#[cfg(all(feature = "core_error", not(feature = "std")))]
+use core::error::Error as ErrorTrait;
 
 extern crate alloc;
 
@@ -72,6 +87,10 @@ impl core::fmt::Display for InvalidEscape {
         Ok(())
     }
 }
+
+#[cfg_attr(docsrs, doc(cfg(any(feature = "std", feature = "core_error"))))]
+#[cfg(any(feature = "std", feature = "core_error"))]
+impl ErrorTrait for InvalidEscape {}
 
 /// A trait distinguishing an object as a handler for custom escape sequences.
 /// 

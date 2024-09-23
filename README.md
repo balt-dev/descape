@@ -36,6 +36,11 @@ Along with this, you can define your own custom escape handlers! See `UnescapeEx
 
 This crate supports `no-std`.
 
+Optionally, this crate has the `std` and `core_error` features, 
+to allow the error type of an invalid escape to implement the `Error` trait.
+
+`std` uses `std::error::Error`, and `core_error` depends on `core::error::Error`, which is stable on Rust 1.82.0 or greater.
+
 ## Examples
 
 ### Parsing an escaped string
