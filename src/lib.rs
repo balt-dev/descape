@@ -43,9 +43,9 @@ to allow the error type of an invalid escape to implement the `Error` trait.
 */
 
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", docsrs))]
 extern crate std;
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", docsrs)]
 use std::error::Error as ErrorTrait;
 #[cfg(all(feature = "core_error", not(feature = "std")))]
 use core::error::Error as ErrorTrait;
