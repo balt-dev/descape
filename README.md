@@ -13,7 +13,14 @@
 Provides utilities for easily parsing escape sequences in a string, using `alloc::borrow::Cow` to only borrow when needed.
 
 This library supports many escape sequences:
-- All escapes mentioned in the documentation of `core::ascii::Char`
+- `\\a` -> `\x07`
+- `\\b` -> `\x08`
+- `\\t` -> `\x09`
+- `\\n` -> `\x0A`
+- `\\v` -> `\x0B`
+- `\\f` -> `\x0C`
+- `\\r` -> `\x0D`
+- `\\e` -> `\x1B`
 - `\\'` -> `'`
 - `\\"` -> `"`
 - <code>&bsol;&bsol;&grave;</code> -> <code>&grave;</code>
@@ -29,16 +36,14 @@ Along with this, you can define your own custom escape handlers! See `UnescapeEx
 
 This crate supports `no-std`.
 
-
-
 ## Examples
 
 ### Parsing an escaped string
 ```rust
 let escaped = "Hello,\\nworld!".to_unescaped();
 assert_eq!(
-    escaped,
-    Ok(Cow::Owned::<'_, str>("Hello,\nworld!".to_string()))
+    escaped.unwrap(),
+    Cow::Owned::<'_, str>("Hello,\nworld!".to_string())
 );
 ```
 
@@ -46,21 +51,22 @@ assert_eq!(
 ```rust
 let no_escapes = "No escapes here!".to_unescaped();
 assert_eq!(
-    no_escapes,
-    Ok(Cow::Borrowed("No escapes here!"))
+    no_escapes.unwrap(),
+    Cow::Borrowed("No escapes here!")
 );
 ```
 
 ### Erroring for invalid escapes
 ```rust
+//                            v  invalid at index 7
 let invalid_escape = r"Uh oh! \xJJ".to_unescaped();
 assert_eq!(
-    invalid_escape,
-    Err(7)
+    invalid_escape.unwrap_err().index,
+    7
 );
 ```
 
-### Custom escape handlers
+### Permitting any escape, handing it back raw
 ```rust
 fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<Option<char>, ()> {
     Ok(Some(chr))
@@ -69,4 +75,28 @@ fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<Option<char>, ()> {
 let escaped = r"\H\e\l\l\o \n \W\o\r\l\d";
 let unescaped = escaped.to_unescaped_with(raw).expect("this is fine");
 assert_eq!(unescaped, "Hello n World");
+```
+
+### Removing escape sequences entirely
+```rust
+fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<Option<char>, ()> {
+    Ok(None)
+}
+
+let escaped = r"What if I want a \nnewline?";
+let unescaped = escaped.to_unescaped_with(raw).expect("this should work");
+assert_eq!(unescaped, "What if I want a newline?");
+```
+
+### Not allowing escape sequences unsupported by Rust
+```rust
+fn rust_only(idx: usize, chr: char, iter: &mut CharIndices) -> Result<Option<char>, ()> {
+    match chr {
+        'a' | 'b' | 'v' | 'f' | 'e' | '`' => Err(()),
+        _ => descape::DefaultHandler.escape(idx, chr, iter)
+    }
+}
+
+r"This is \nfine".to_unescaped_with(rust_only).expect(r"\n is valid");
+r"This is not \fine".to_unescaped_with(rust_only).expect_err(r"\f is invalid");
 ```

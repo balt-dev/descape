@@ -4,7 +4,7 @@ use descape::UnescapeExt;
 
 macro_rules! ensure_err {
     ($($name: ident),+) => {$(
-        assert_eq!($name.to_unescaped(), Err(0), "{} parsed successfully when invalid", stringify!($name));
+        assert_eq!($name.to_unescaped().map_err(|err| err.index), Err(0), "{} parsed successfully when invalid", stringify!($name));
     )+};
 }
 
@@ -27,14 +27,14 @@ fn test_escapes() {
 
     assert_eq!(
         ESCAPED.to_unescaped()
-            .map_err(|idx| &ESCAPED[..idx])
+            .map_err(|err| &ESCAPED[..err.index])
             .expect("should not reject legal escaped string"),
         Cow::Owned::<'_, str>(UNESCAPED.to_string())
     );
 
     assert_eq!(
         NO_ESCAPES.to_unescaped()
-            .map_err(|idx| &ESCAPED[..idx])
+            .map_err(|err| &ESCAPED[..err.index])
             .expect("should not reject legal escaped string"),
         Cow::Borrowed(NO_ESCAPES)
     );
@@ -81,3 +81,5 @@ fn test_customs() {
         "custom escape gave incorrect result"
     );
 }
+
+
