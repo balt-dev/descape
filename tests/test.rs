@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::str::CharIndices;
-use descape::UnescapeExt;
+use descape::*;
 
 macro_rules! ensure_err {
     ($($name: ident),+) => {$(
@@ -52,16 +52,16 @@ fn test_escapes() {
     );
 }
 
-fn custom_esc(_: usize, chr: char, iter: &mut CharIndices<'_>) -> Result<Option<char>, ()> {
+fn custom_esc<'a>(_: usize, chr: char, iter: &mut CharIndices<'a>) -> Result<EscapeValue<'a>, ()> {
     if chr == 'T' {
         let (_, next) = iter.next().ok_or(())?;
-        return Ok(Some(match next {
+        return Ok((match next {
             'a' => 'g',
             'o' => 'p',
             _ => Err(())?
-        }));
+        }).into());
     }
-    Ok(None)
+    Ok(EscapeValue::Remove)
 }
 
 #[test]

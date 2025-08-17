@@ -71,10 +71,10 @@ assert_eq!(
 );
 ```
 
-### Permitting any escape, handing it back raw
+## Permitting any escape, handing it back raw
 ```rust
-fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<Option<char>, ()> {
-    Ok(Some(chr))
+fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<EscapeValue<'_>, ()> {
+    Ok(chr.into())
 }
 
 let escaped = r"\H\e\l\l\o \n \W\o\r\l\d";
@@ -82,10 +82,10 @@ let unescaped = escaped.to_unescaped_with(raw).expect("this is fine");
 assert_eq!(unescaped, "Hello n World");
 ```
 
-### Removing escape sequences entirely
+## Removing escape sequences entirely
 ```rust
-fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<Option<char>, ()> {
-    Ok(None)
+fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<EscapeValue<'_>, ()> {
+    Ok(EscapeValue::Remove)
 }
 
 let escaped = r"What if I want a \nnewline?";
@@ -93,15 +93,32 @@ let unescaped = escaped.to_unescaped_with(raw).expect("this should work");
 assert_eq!(unescaped, "What if I want a newline?");
 ```
 
-### Not allowing escape sequences unsupported by Rust
+## Not allowing escape sequences unsupported by Rust
 ```rust
-fn rust_only(idx: usize, chr: char, iter: &mut CharIndices) -> Result<Option<char>, ()> {
+fn rust_only(idx: usize, chr: char, iter: &mut CharIndices) -> Result<EscapeValue<'_>, ()> {
     match chr {
         'a' | 'b' | 'v' | 'f' | 'e' | '`' => Err(()),
-        _ => descape::DefaultHandler.escape(idx, chr, iter)
+        _ => descape::DefaultEscapeHandler.escape(idx, chr, iter)
     }
 }
 
 r"This is \nfine".to_unescaped_with(rust_only).expect(r"\n is valid");
 r"This is not \fine".to_unescaped_with(rust_only).expect_err(r"\f is invalid");
 ```
+
+## Custom escape prefixes
+```rust
+struct PercentEscape;
+impl EscapeHandler for PercentEscape {
+    fn prefix(&self) -> char { '%' };
+    fn escape<'iter, 'source>(&mut self, idx: usize, chr: char, iter: &'iter mut CharIndices<'source>) -> Result<EscapeValue<'source>, ()> {
+        descape::DefaultEscapeHandler.escape(idx, chr, iter)
+    }
+}
+
+assert_eq!(
+    r"Hello,%tworld!".to_unescaped_with(PercentEscape).unwrap(),
+    "Hello,\tworld!"
+)
+```
+

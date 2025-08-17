@@ -54,10 +54,7 @@ extern crate alloc;
 
 use alloc::{
     borrow::Cow,
-    string::{
-        String,
-        ToString
-    },
+    string::String,
     str::CharIndices
 };
 
@@ -65,6 +62,7 @@ mod sealed {
     pub trait Sealed {}
     impl Sealed for str {}
 }
+
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 /// An error representing an invalid escape sequence in a string.
@@ -92,6 +90,43 @@ impl core::fmt::Display for InvalidEscape {
 #[cfg(any(feature = "std", feature = "core_error", docsrs))]
 impl ErrorTrait for InvalidEscape {}
 
+/// An enum defining all possible non-error returns for a macro.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EscapeValue<'s> {
+    /// Remove the escape sequence entirely.
+    Remove,
+    /// Leave the escape sequence as is.
+    Skip,
+    /// Replace the escape sequence with a single character.
+    Character(char),
+    /// Replace the escape sequence with a string of characters.
+    String(Cow<'s, str>)
+}
+
+impl From<char> for EscapeValue<'static> {
+    fn from(value: char) -> Self {
+        Self::Character(value)
+    }
+}
+
+impl<'string> From<&'string str> for EscapeValue<'string> {
+    fn from(value: &'string str) -> Self {
+        Self::String(Cow::Borrowed(value))
+    }
+}
+
+impl<'string> From<Cow<'string, str>> for EscapeValue<'string> {
+    fn from(value: Cow<'string, str>) -> Self {
+        Self::String(value)
+    }
+}
+
+impl<'string> From<String> for EscapeValue<'string> {
+    fn from(value: String) -> Self {
+        Self::String(Cow::Owned(value))
+    }
+}
+
 /// A trait distinguishing an object as a handler for custom escape sequences.
 /// 
 /// For convenience, this trait is **automatically implemented** for all implementors of `FnMut` with the correct signature.
@@ -117,35 +152,47 @@ pub trait EscapeHandler {
 
     /// ## Permitting any escape, handing it back raw
     /// ```rust
-    /// # use descape::UnescapeExt; use std::str::CharIndices;
-    /// fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<Option<char>, ()> {
-    ///     Ok(Some(chr))
+    /// # use descape::*; use std::str::CharIndices;
+    /// fn raw<'i, 's>(idx: usize, chr: char, iter: &'i mut CharIndices<'s>) -> Result<EscapeValue<'s>, ()> {
+    ///     Ok(chr.into())
     /// }
     
     /// let escaped = r"\H\e\l\l\o \n \W\o\r\l\d";
-    /// let unescaped = escaped.to_unescaped_with(raw).expect("this is fine");
+    /// let unescaped = escaped.to_unescaped_with(raw).unwrap();
     /// assert_eq!(unescaped, "Hello n World");
     /// ```
 
     /// ## Removing escape sequences entirely
     /// ```rust
-    /// # use descape::UnescapeExt; use std::str::CharIndices;
-    /// fn raw(idx: usize, chr: char, _: &mut CharIndices) -> Result<Option<char>, ()> {
-    ///     Ok(None)
+    /// # use descape::*; use std::str::CharIndices;
+    /// fn raw<'i, 's>(idx: usize, chr: char, iter: &'i mut CharIndices<'s>) -> Result<EscapeValue<'s>, ()> {
+    ///     Ok(EscapeValue::Remove)
     /// }
 
     /// let escaped = r"What if I want a \nnewline?";
-    /// let unescaped = escaped.to_unescaped_with(raw).expect("this should work");
+    /// let unescaped = escaped.to_unescaped_with(raw).unwrap();
     /// assert_eq!(unescaped, "What if I want a newline?");
+    /// ```
+
+    /// ## Replacing escape sequences with their character number
+    /// ```rust
+    /// # use descape::*; use std::str::CharIndices;
+    /// fn charnum<'i, 's>(idx: usize, chr: char, iter: &'i mut CharIndices<'s>) -> Result<EscapeValue<'s>, ()> {
+    ///     Ok(format!("[{:02X}]", chr as u32).into())
+    /// }
+
+    /// let escaped = r"Well this\Ais a\Zthing.";
+    /// let unescaped = escaped.to_unescaped_with(charnum).unwrap();
+    /// assert_eq!(unescaped, "Well this[41]is a[5A]thing.");
     /// ```
 
     /// ## Not allowing escape sequences unsupported by Rust
     /// ```rust
-    /// # use descape::{UnescapeExt, EscapeHandler}; use std::str::CharIndices;
-    /// fn rust_only(idx: usize, chr: char, iter: &mut CharIndices) -> Result<Option<char>, ()> {
+    /// # use descape::*; use std::str::CharIndices;
+    /// fn rust_only<'i, 's>(idx: usize, chr: char, iter: &'i mut CharIndices<'s>) -> Result<EscapeValue<'s>, ()> {
     ///     match chr {
     ///         'a' | 'b' | 'v' | 'f' | 'e' | '`' => Err(()),
-    ///         _ => descape::DefaultHandler.escape(idx, chr, iter)
+    ///         _ => descape::DefaultEscapeHandler.escape(idx, chr, iter)
     ///     }
     /// }
     
@@ -154,17 +201,37 @@ pub trait EscapeHandler {
     /// ```
     
     /// # An informal note
-    /// Ideally, this trait would return `Result<Option<char>, Option<Box<dyn Error>>>`, but `Error` has only been in `core`
+    /// Ideally, this trait would return `Result<EscapeValue<'source>, Option<Box<dyn Error>>>`, but `Error` has only been in `core`
     /// since Rust version `1.82.0`. Using it would bump the MSRV by a tremendous amount,
     /// and as such it has been left out.
     #[allow(clippy::result_unit_err, clippy::missing_errors_doc)]
-    fn escape(&mut self, idx: usize, chr: char, iter: &mut CharIndices<'_>) -> Result<Option<char>, ()>;
+    fn escape<'iter, 'source>(&mut self, idx: usize, chr: char, iter: &'iter mut CharIndices<'source>) -> Result<EscapeValue<'source>, ()>;
+    /// The escape prefix to use for this handler.
+    /// Defaults to `\\`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use descape::*; use std::str::CharIndices;
+    /// struct PercentEscape;
+    /// impl EscapeHandler for PercentEscape {
+    ///     fn prefix(&self) -> char { '%' }
+    ///     fn escape<'iter, 'source>(&mut self, idx: usize, chr: char, iter: &'iter mut CharIndices<'source>) -> Result<EscapeValue<'source>, ()> {
+    ///         descape::DefaultEscapeHandler.escape(idx, chr, iter)
+    ///     }
+    /// }
+    ///
+    /// assert_eq!(
+    ///     r"Hello,%tworld!".to_unescaped_with(PercentEscape).unwrap(),
+    ///     "Hello,\tworld!"
+    /// )
+    /// ```
+    fn prefix(&self) -> char { '\\' }
 }
 
 impl<F> EscapeHandler for F 
-    where F: for<'iter, 'source> FnMut(usize, char, &'iter mut CharIndices<'source>) -> Result<Option<char>, ()>
+    where F: for<'iter, 'source> FnMut(usize, char, &'iter mut CharIndices<'source>) -> Result<EscapeValue<'source>, ()>
 {
-    fn escape(&mut self, idx: usize, chr: char, iter: &mut CharIndices<'_>) -> Result<Option<char>, ()> {
+    fn escape<'iter, 'source>(&mut self, idx: usize, chr: char, iter: &'iter mut CharIndices<'source>) -> Result<EscapeValue<'source>, ()> {
         self(idx, chr, iter)
     }
 }
@@ -181,38 +248,6 @@ pub trait UnescapeExt: sealed::Sealed {
     # Errors
     Errors if there's an invalid escape sequence in the string.
     Passes back the byte index of the invalid character.
-
-    # Examples
-    ## Parsing an escaped string
-    ```rust
-    # use std::borrow::Cow; use descape::UnescapeExt;
-    let escaped = "Hello,\\nworld!".to_unescaped();
-    assert_eq!(
-        escaped.unwrap(),
-        Cow::Owned::<'_, str>("Hello,\nworld!".to_string())
-    );
-    ```
-
-    ## Not allocating for a string without escapes
-    ```rust
-    # use std::borrow::Cow; use descape::UnescapeExt;
-    let no_escapes = "No escapes here!".to_unescaped();
-    assert_eq!(
-        no_escapes.unwrap(),
-        Cow::Borrowed("No escapes here!")
-    );
-    ```
-
-    ## Erroring for invalid escapes
-    ```
-    //                            v  invalid at index 7
-    # use std::borrow::Cow; use descape::UnescapeExt;
-    let invalid_escape = r"Uh oh! \xJJ".to_unescaped();
-    assert_eq!(
-        invalid_escape.unwrap_err().index,
-        7
-    );
-    ```
      */
     fn to_unescaped(&self) -> Result<Cow<'_, str>, InvalidEscape>;
     /**
@@ -233,15 +268,15 @@ pub trait UnescapeExt: sealed::Sealed {
 
 impl UnescapeExt for str {
     #[inline]
-    fn to_unescaped(&self) -> Result<Cow<str>, InvalidEscape> {
-        self.to_unescaped_with(DefaultHandler)
+    fn to_unescaped(&'_ self) -> Result<Cow<'_, str>, InvalidEscape> {
+        self.to_unescaped_with(DefaultEscapeHandler)
     }
 
     // Put this outside to prevent monomorphization bloat
     fn to_unescaped_with(
-        &self, 
+        &'_ self,
         mut callback: impl EscapeHandler
-    ) -> Result<Cow<str>, InvalidEscape> {
+    ) -> Result<Cow<'_, str>, InvalidEscape> {
         to_unescaped_with_mono(self, &mut callback)
     }
 }
@@ -254,9 +289,10 @@ fn to_unescaped_with_mono<'this, 'cb>(
     let mut iter = this.char_indices();
     let mut seen: &'this str = "";
     let mut owned = None::<String>;
+    let prefix = callback.prefix();
 
     while let Some((index, chr)) = iter.next() {
-        if chr != '\\' {
+        if chr != prefix {
             if let Some(owned) = &mut owned {
                 owned.push(chr);
             } else {
@@ -264,21 +300,23 @@ fn to_unescaped_with_mono<'this, 'cb>(
             }
             continue;
         }
-        let owned = owned.get_or_insert_with(|| {
-            let mut string = seen.to_string();
-            string.reserve_exact(this.len() - seen.len());
-            string
-        });
-        if let Some((_, chr)) = iter.next() {
-            if let Some(res) = callback.escape(index, chr, &mut iter)
-                .map_err(|()| InvalidEscape { index })?
-            {
-                owned.push(res);
+        if let Some((i, chr)) = iter.next() {
+            let res = callback.escape(index, chr, &mut iter)
+                .map_err(|()| InvalidEscape { index })?;
+            if res == EscapeValue::Skip && owned.is_none() {
+                seen = &this[..i + chr.len_utf8()];
                 continue;
+            }
+            let owned = owned.get_or_insert_with(|| seen.into());
+            match res {
+                EscapeValue::Character(c) => { owned.push(c); continue; },
+                EscapeValue::String(str) => { owned.push_str(&*str); continue; },
+                EscapeValue::Remove => { continue; },
+                EscapeValue::Skip => { owned.push(prefix); owned.push(chr); continue; }
             }
         } else {
             // No matches found
-            return Err(InvalidEscape::new(owned.len()));
+            return Err(InvalidEscape::new(index));
         }
     }
 
@@ -310,40 +348,40 @@ fn to_unescaped_with_mono<'this, 'cb>(
 /// - `\\uXXXX` -> `\u{XXXX}`
 /// - `\\u{HEX}` -> `\u{HEX}`
 ///
-pub struct DefaultHandler;
+pub struct DefaultEscapeHandler;
 
-impl EscapeHandler for DefaultHandler {
-    fn escape(&mut self, _: usize, chr: char, iter: &mut CharIndices) -> Result<Option<char>, ()> {
+impl EscapeHandler for DefaultEscapeHandler {
+    fn escape<'iter, 'source>(&mut self, _idx: usize, chr: char, iter: &'iter mut CharIndices<'source>) -> Result<EscapeValue<'source>, ()> {
         Ok( match chr {
-            'a' => Some('\x07'),
-            'b' => Some('\x08'),
-            't' => Some('\x09'),
-            'n' => Some('\x0A'),
-            'v' => Some('\x0B'),
-            'f' => Some('\x0C'),
-            'r' => Some('\x0D'),
-            'e' => Some('\x1B'),
-            '`' => Some('`'),
-            '\'' => Some('\''),
-            '"' => Some('"'),
-            '\\' => Some('\\'),
+            'a' => '\x07'.into(),
+            'b' => '\x08'.into(),
+            't' => '\x09'.into(),
+            'n' => '\x0A'.into(),
+            'v' => '\x0B'.into(),
+            'f' => '\x0C'.into(),
+            'r' => '\x0D'.into(),
+            'e' => '\x1B'.into(),
+            '`' => '`'.into(),
+            '\'' => '\''.into(),
+            '"' => '"'.into(),
+            '\\' => '\\'.into(),
             'u' => {
                 let (chr, skip) = unescape_unicode(iter).ok_or(())?;
                 // Skip the needed amount of characters
                 for _ in 0..skip { iter.next(); }
-                Some(chr)
+                chr.into()
             },
             'x' => {
                 // Skip two characters
                 let res = unescape_hex(iter).ok_or(())?;
                 iter.next();
                 iter.next();
-                Some(res)
+                res.into()
             },
             c if c.is_digit(8) => {
                 let (chr, skip) = unescape_oct(c, iter).ok_or(())?;
                 for _ in 0..skip { iter.next(); }
-                Some(chr)
+                chr.into()
             },
             _ => return Err(()),
         } )
