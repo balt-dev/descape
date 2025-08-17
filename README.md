@@ -32,7 +32,15 @@ This library supports many escape sequences:
 - `\\uXXXX` -> `\u{XXXX}`
 - `\\u{HEX}` -> `\u{HEX}`
 
-Along with this, you can define your own custom escape handlers! See `UnescapeExt::to_unescaped_with` for more information on that.
+Along with this, you can define your own custom escape handlers!
+
+Custom escape handlers support multi-character escape results,
+skipping past escape sequences,
+and even custom escape prefixes!
+
+See `descape::EscapeHandler`.
+
+
 
 This crate supports `no-std`.
 

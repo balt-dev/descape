@@ -58,12 +58,6 @@ use alloc::{
     str::CharIndices
 };
 
-mod sealed {
-    pub trait Sealed {}
-    impl Sealed for str {}
-}
-
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 /// An error representing an invalid escape sequence in a string.
 pub struct InvalidEscape {
@@ -234,6 +228,11 @@ impl<F> EscapeHandler for F
     fn escape<'iter, 'source>(&mut self, idx: usize, chr: char, iter: &'iter mut CharIndices<'source>) -> Result<EscapeValue<'source>, ()> {
         self(idx, chr, iter)
     }
+}
+
+mod sealed {
+    pub trait Sealed {}
+    impl Sealed for str {}
 }
 
 /// An extension trait for [`&str`](str) to allow parsing escape sequences in strings, only copying when needed.
